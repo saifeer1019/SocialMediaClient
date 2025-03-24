@@ -97,7 +97,7 @@ const ChatWidget = () => {
         
         if (!conversationExists) {
           // Fetch the updated conversation from the server
-          fetch(`http://localhost:3001/chat/conversation/${conversationId}`, {
+          fetch(`${import.meta.env.VITE_URL}/chat/conversation/${conversationId}`, {
             method: "GET",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -153,7 +153,7 @@ const ChatWidget = () => {
       try {
         console.log('fetching conversations');
         const response = await fetch(
-          `http://localhost:3001/chat/${user._id}/conversations`,
+          `${import.meta.env.VITE_URL}/chat/${user._id}/conversations`,
           {
             method: "GET",
             headers: {
