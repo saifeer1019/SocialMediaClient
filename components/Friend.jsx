@@ -21,7 +21,7 @@ const Friend = ({ friendId, name, subtitle, userPicturePath, showChat = true }) 
 
   const patchFriend = async () => {
     const response = await fetch(
-      `http://localhost:3001/users/${_id}/${friendId}`,
+      `${import.meta.env.VITE_URL}/users/${_id}/${friendId}`,
       {
         method: "PATCH",
         headers: {

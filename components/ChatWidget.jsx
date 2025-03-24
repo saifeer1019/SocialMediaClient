@@ -50,7 +50,7 @@ const ChatWidget = () => {
 
   // Socket.io connection
   useEffect(() => {
-    const newSocket = io("http://localhost:3001");
+    const newSocket = io(`${import.meta.env.VITE_URL}`);
     setSocket(newSocket);
 
     return () => {
