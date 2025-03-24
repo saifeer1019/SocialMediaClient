@@ -1,4 +1,3 @@
-// components/ChatWidget.jsx
 import { useEffect, useState, useRef } from "react";
 import {
   Box,
@@ -36,7 +35,7 @@ const ChatWidget = () => {
   const { palette } = useTheme();
   const token = useSelector((state) => state.token);
   const user = useSelector((state) => state.user);
-  const conversations = useSelector((state) => state.conversations) || []; // Ensure conversations is an array
+  const conversations = useSelector((state) => state.conversations || []); // Ensure conversations is an array
   const activeConversation = useSelector((state) => state.activeConversation);
   const chatOpen = useSelector((state) => state.chatOpen);
 
@@ -45,8 +44,16 @@ const ChatWidget = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
   const [showConversations, setShowConversations] = useState(true);
+  const [typingTimeout, setTypingTimeout] = useState(null);
 
   const messagesEndRef = useRef(null);
+
+  // Debug when conversations become empty
+  useEffect(() => {
+    if (conversations && conversations.length === 0) {
+      console.warn("Conversations became empty. Stack trace:", new Error().stack);
+    }
+  }, [conversations]);
 
   // Socket.io connection
   useEffect(() => {
@@ -77,32 +84,56 @@ const ChatWidget = () => {
       });
   
       const handleMessageReceived = ({ messageToSend }) => {
-        console.log("Received message data:", messageToSend); // Log the entire payload
+        console.log("Received message data:", messageToSend);
         const { conversationId, newMessage } = messageToSend;
-        console.log("Destructured newMessage:", newMessage); // Log the destructured newMessage
-    
+        
         if (!newMessage) {
           console.error("newMessage is undefined. Check the payload structure.");
           return;
         }
- 
-        dispatch(
-          addMessage({
-            conversationId,
-            message: newMessage,
+        
+        // Check if the conversation exists in our state
+        const conversationExists = conversations.some(c => c._id === conversationId);
+        
+        if (!conversationExists) {
+          // Fetch the updated conversation from the server
+          fetch(`http://localhost:3001/chat/conversation/${conversationId}`, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
           })
-        );
-   
+          .then(response => response.json())
+          .then(updatedConversation => {
+            dispatch(setConversations([...conversations, updatedConversation]));
+          })
+          .catch(error => {
+            console.error("Error fetching conversation:", error);
+          });
+        } else {
+          // Add the message to the existing conversation
+          dispatch(
+            addMessage({
+              conversationId,
+              message: newMessage,
+            })
+          );
+        }
       };
   
       socket.on("message received", handleMessageReceived);
   
       socket.on("update conversation", (updatedConversation) => {
         // Update the conversation in our list
-        const updatedConversations = conversations.map((c) =>
-          c._id === updatedConversation._id ? updatedConversation : c
-        );
-        dispatch(setConversations(updatedConversations));
+        const existingIndex = conversations.findIndex(c => c._id === updatedConversation._id);
+        
+        if (existingIndex >= 0) {
+          const updatedConversations = [...conversations];
+          updatedConversations[existingIndex] = updatedConversation;
+          dispatch(setConversations(updatedConversations));
+        } else {
+          dispatch(setConversations([...conversations, updatedConversation]));
+        }
       });
   
       // Clean up event listeners when the component unmounts
@@ -114,13 +145,13 @@ const ChatWidget = () => {
         socket.off("update conversation");
       };
     }
-  }, [socket]); // Empty dependency array ensures this runs only once
+  }, [socket, conversations, dispatch, token, user._id]); // Include dependencies
 
   // Fetch all conversations for the user
   useEffect(() => {
     const getConversations = async () => {
       try {
-        console.log('fetching')
+        console.log('fetching conversations');
         const response = await fetch(
           `http://localhost:3001/chat/${user._id}/conversations`,
           {
@@ -140,15 +171,15 @@ const ChatWidget = () => {
       }
     };
 
-    if (user) {
+    if (user && token) {
       getConversations();
     }
   }, [user, token, dispatch]);
 
   // Join the active conversation room
   useEffect(() => {
-    if (socket && activeConversation) {
-      console.log("socket and active Conversations present. Emiting join Chat");
+    if (socket && activeConversation && !activeConversation.isTemp) {
+      console.log("Socket and active conversation present. Emitting join chat");
       socket.emit("join chat", activeConversation._id);
     }
   }, [socket, activeConversation]);
@@ -160,7 +191,7 @@ const ChatWidget = () => {
 
   // Handle sending a message
   const handleSendMessage = async () => {
-    if (!message.trim()) return; // Don't send empty messages
+    if (!message.trim() || !activeConversation) return; // Don't send empty messages
     console.log("Sending Message:", message);
     console.log("Active Conversation:", activeConversation);
   
@@ -206,9 +237,12 @@ const ChatWidget = () => {
           sender: user._id,
         });
   
+        // Remove temporary conversation and add the new one
+        const updatedConversations = conversations.filter(c => !c.isTemp || c._id !== activeConversation._id);
+        
         // Update Redux state with the new conversation
         dispatch(setActiveConversation(newConversation));
-        dispatch(setConversations([newConversation, ...conversations]));
+        dispatch(setConversations([newConversation, ...updatedConversations]));
   
         // Add the temporary message to the new conversation
         dispatch(
@@ -239,15 +273,18 @@ const ChatWidget = () => {
   
       // Clear the message input
       setMessage("");
+      
+      // Clear typing indicator
+      if (typingTimeout) {
+        clearTimeout(typingTimeout);
+        setTypingTimeout(null);
+        socket.emit("stop typing", activeConversation._id);
+      }
     } catch (error) {
       console.error("Error sending message:", error);
     }
   };
 
-  useEffect(()=>{
-    console.log('conversations changed', conversations)
-  
-  }, [conversations])
   // Format timestamp
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
@@ -256,14 +293,38 @@ const ChatWidget = () => {
 
   // Get other participant in 1:1 chat
   const getOtherParticipant = (conversation) => {
-    if (!conversation || !conversation.participants)
+    if (!conversation || !conversation.participants) {
       return { firstName: "", lastName: "" };
+    }
     return (
       conversation.participants.find((p) => p._id !== user._id) || {
         firstName: "",
         lastName: "",
       }
     );
+  };
+
+  // Handle typing indicators
+  const handleTyping = () => {
+    if (socket && activeConversation) {
+      if (!isTyping) {
+        socket.emit("typing", activeConversation._id);
+        setIsTyping(true);
+      }
+      
+      // Clear previous timeout
+      if (typingTimeout) {
+        clearTimeout(typingTimeout);
+      }
+      
+      // Set new timeout
+      const timeout = setTimeout(() => {
+        socket.emit("stop typing", activeConversation._id);
+        setIsTyping(false);
+      }, 3000);
+      
+      setTypingTimeout(timeout);
+    }
   };
 
   return (
@@ -324,6 +385,7 @@ const ChatWidget = () => {
             </Box>
           ) : (
             conversations.map((conversation) => {
+              if (!conversation) return null; // Skip if conversation is null/undefined
               const otherUser = getOtherParticipant(conversation);
               return (
                 <Box key={conversation._id}>
@@ -375,29 +437,32 @@ const ChatWidget = () => {
           sx={{ overflowY: "auto" }}
         >
           {activeConversation && activeConversation.messages && activeConversation.messages.length > 0 ? (
-            activeConversation.messages.map((msg) => (
-              <Box
-                key={msg._id}
-                alignSelf={msg.sender === user._id ? "flex-end" : "flex-start"}
-                bgcolor={
-                  msg.sender === user._id
-                    ? palette.primary.main
-                    : palette.neutral.light
-                }
-                color={
-                  msg.sender === user._id ? "white" : palette.neutral.dark
-                }
-                p="0.5rem 1rem"
-                m="0.5rem 0"
-                borderRadius="1rem"
-                maxWidth="70%"
-              >
-                <Typography>{msg.content}</Typography>
-                <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                  {formatTime(msg.createdAt)}
-                </Typography>
-              </Box>
-            ))
+            activeConversation.messages.map((msg) => {
+              if (!msg) return null; // Skip if message is null/undefined
+              return (
+                <Box
+                  key={msg._id}
+                  alignSelf={msg.sender === user._id ? "flex-end" : "flex-start"}
+                  bgcolor={
+                    msg.sender === user._id
+                      ? palette.primary.main
+                      : palette.neutral.light
+                  }
+                  color={
+                    msg.sender === user._id ? "white" : palette.neutral.dark
+                  }
+                  p="0.5rem 1rem"
+                  m="0.5rem 0"
+                  borderRadius="1rem"
+                  maxWidth="70%"
+                >
+                  <Typography>{msg.content}</Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                    {formatTime(msg.createdAt)}
+                  </Typography>
+                </Box>
+              );
+            })
           ) : (
             <Box
               display="flex"
@@ -426,7 +491,7 @@ const ChatWidget = () => {
       )}
 
       {/* Message Input (only show in active chat) */}
-      {!showConversations && (
+      {!showConversations && activeConversation && (
         <Box
           p={2}
           borderTop={`1px solid ${palette.neutral.light}`}
@@ -439,22 +504,7 @@ const ChatWidget = () => {
             value={message}
             onChange={(e) => {
               setMessage(e.target.value);
-              if (socket && activeConversation) {
-                // Handle typing indicators
-                if (!isTyping) {
-                  socket.emit("typing", activeConversation._id);
-                }
-
-                // Clear typing indicator after 3 seconds of inactivity
-                const lastTypingTime = new Date().getTime();
-                setTimeout(() => {
-                  const timeNow = new Date().getTime();
-                  const timeDiff = timeNow - lastTypingTime;
-                  if (timeDiff >= 3000) {
-                    socket.emit("stop typing", activeConversation._id);
-                  }
-                }, 3000);
-              }
+              handleTyping();
             }}
             onKeyPress={(e) => {
               if (e.key === "Enter") {
