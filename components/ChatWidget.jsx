@@ -448,8 +448,8 @@ useEffect(()=>{
           height: 450,
           position: "fixed", // Change from "absolute" to "fixed"
           bottom: 0,
-          right: { xs: 0, sm: 350 },
-          mx: { xs: 1, sm: 0 }, // margin-x to center on small devices if needed
+          right: 100 ,
+
           width: { xs: '95%', sm: 350 }, // Full width on phones (90%), fixed width on larger screens
           marginLeft: "auto",
           borderRadius: "10px 10px 0 0",

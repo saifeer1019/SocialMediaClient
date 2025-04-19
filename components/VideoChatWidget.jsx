@@ -224,7 +224,7 @@ if(currentCall){
             </div>
 
             {/* My Video (Small overlay) */}
-          <div className="absolute bottom-4 right-4 w-1/4 md:w-1/5 lg:w-1/6 aspect-video bg-gray-800 rounded-md overflow-hidden shadow-lg">
+          <div className="absolute bottom-4 right-4 w-1/4 md:w-1/5 lg:w-1/6  aspect-[9/16] md:aspect-video bg-gray-800 rounded-md overflow-hidden shadow-lg">
               <video
                 playsInline
                 muted
