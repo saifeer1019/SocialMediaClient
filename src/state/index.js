@@ -1,5 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 
+
 const initialState = {
   mode: "light",
   user: null,
@@ -53,6 +54,10 @@ export const authSlice = createSlice({
         return post;
       });
       state.posts = updatedPosts;
+    },
+
+    deletePost: (state, action) => {
+      state.posts = state.posts.filter(post => post._id !== action.payload.post._id);
     },
     // Chat reducers with fixes
     setConversations: (state, action) => {
@@ -233,6 +238,7 @@ export const {
   setFriends, 
   setPosts, 
   setPost,
+  deletePost,
   setConversations, 
   setActiveConversation,
   setChatOpen,

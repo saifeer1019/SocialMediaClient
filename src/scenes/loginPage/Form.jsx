@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Button,
@@ -11,7 +11,7 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { Formik } from "formik";
 import * as yup from "yup";
 import { useNavigate } from "react-router-dom";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { setLogin } from "../../state";
 import Dropzone from "react-dropzone";
 import FlexBetween from "../../../components/FlexBetween";
@@ -54,6 +54,7 @@ const Form = () => {
   const isNonMobile = useMediaQuery("(min-width:600px)");
   const isLogin = pageType === "login";
   const isRegister = pageType === "register";
+  const token = useSelector((state) => state.token)
 
   const register = async (values, onSubmitProps) => {
     // this allows us to send form info with image
@@ -77,7 +78,10 @@ const Form = () => {
       setPageType("login");
     }
   };
+useEffect(() =>{
+  console.log('token Changed', token)
 
+}, [token])
   const login = async (values, onSubmitProps) => {
     console.log('login'
       , import.meta.env.VITE_URL)
@@ -89,13 +93,15 @@ const Form = () => {
     const loggedIn = await loggedInResponse.json();
     onSubmitProps.resetForm();
     if (loggedIn) {
+      console.log('logged in')
+      console.log(token)
       dispatch(
         setLogin({
           user: loggedIn.user,
           token: loggedIn.token,
         })
       );
-      navigate("/home");
+       navigate("/home");
     }
   };
 

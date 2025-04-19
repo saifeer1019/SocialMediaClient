@@ -1,4 +1,5 @@
 import { Box, useMediaQuery } from "@mui/material";
+import {useState} from 'react'
 import { useSelector } from "react-redux";
 import Navbar from "../navbar";
 import UserWidget from "../widgets/UserWidget";
@@ -7,14 +8,26 @@ import PostsWidget from "../widgets/PostsWidget";
 import AdvertWidget from "../widgets/AdvertWidget";
 import FriendListWidget from "../widgets/FriendListWidget";
 import ChatWidget from '../../../components/ChatWidget'
+import Test from "../../../components/Test";
+import { useSocket } from "../../context/SocketContext";
+import VideoChatWidget from "../../../components/VideoChatWidget";
+import VideoCallNotification from "../widgets/VideoCallNotification";
 
 const HomePage = () => {
+  const {videoCallStatus, setVideoCallStatus} = useSocket()
   const isNonMobileScreens = useMediaQuery("(min-width:1000px)");
   const { _id, picturePath } = useSelector((state) => state.user);
+  const [open, setOpen] = useState(false)
 
+  const handleOpen = ()=>{
+    setOpen(true)
+  }
   return (
     <Box>
+    <ChatWidget />
       <Navbar />
+
+
       <Box
         width="100%"
         padding="2rem 6%"
@@ -24,6 +37,20 @@ const HomePage = () => {
       >
         <Box flexBasis={isNonMobileScreens ? "26%" : undefined}>
           <UserWidget userId={_id} picturePath={picturePath} />
+       
+
+
+
+
+
+
+
+       
+       
+       
+          {  (videoCallStatus == 'calling' || videoCallStatus == 'accepted') && <VideoChatWidget />}
+   
+          { videoCallStatus == 'beingCalled' && <VideoCallNotification />}
         </Box>
         <Box
           flexBasis={isNonMobileScreens ? "42%" : undefined}

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux"; import { useNavigate } from "react-router-dom";
 import { setPosts } from "../../state";
 import PostWidget from "./PostWidget";
 
@@ -7,6 +7,7 @@ const PostsWidget = ({ userId, isProfile = false }) => {
   const dispatch = useDispatch();
   const posts = useSelector((state) => state.posts);
   const token = useSelector((state) => state.token);
+  const navigate = useNavigate()
 
   const getPosts = async () => {
     const response = await fetch(`${import.meta.env.VITE_URL}/posts`, {
@@ -14,12 +15,19 @@ const PostsWidget = ({ userId, isProfile = false }) => {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await response.json();
-    dispatch(setPosts({ posts: data }));
+    console.log(data)
+    if(!data.error){
+      dispatch(setPosts({ posts: data }));
+    }
+    else{ navigate('/')
+
+    }
+
   };
 
   const getUserPosts = async () => {
     const response = await fetch(
-      `${import.meta.env.VITE_URL}/${userId}/posts`,
+      `${import.meta.env.VITE_URL}/posts/user/${userId}`,
       {
         method: "GET",
         headers: { Authorization: `Bearer ${token}` },
@@ -31,6 +39,7 @@ const PostsWidget = ({ userId, isProfile = false }) => {
 
   useEffect(() => {
     if (isProfile) {
+      console.log('is fklvnlk')
       getUserPosts();
     } else {
       getPosts();
@@ -48,9 +57,11 @@ const PostsWidget = ({ userId, isProfile = false }) => {
           description,
           location,
           picturePath,
+          picturePaths,
           userPicturePath,
           likes,
           comments,
+          newComments
         }) => (
           <PostWidget
             key={_id}
@@ -60,9 +71,11 @@ const PostsWidget = ({ userId, isProfile = false }) => {
             description={description}
             location={location}
             picturePath={picturePath}
+            picturePaths={picturePaths}
             userPicturePath={userPicturePath}
             likes={likes}
             comments={comments}
+            newComments={newComments}
           />
         )
       )}

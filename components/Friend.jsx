@@ -4,9 +4,17 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { setFriends, openChat } from "../src/state";
 import FlexBetween from "./FlexBetween";
+import DeleteIcon from '@mui/icons-material/Delete';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import {useState} from 'react'
 import UserImage from "./UserImage";
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import { deletePost } from "../src/state"
+import {useEffect} from 'react'
 
-const Friend = ({ friendId, name, subtitle, userPicturePath, showChat = true }) => {
+
+const Friend = ({ friendId, name, subtitle, userPicturePath, showChat = true, isFeed= false, isUser=  false, postId='' }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { _id } = useSelector((state) => state.user);
@@ -17,7 +25,45 @@ const Friend = ({ friendId, name, subtitle, userPicturePath, showChat = true }) 
   const primaryDark = palette.primary.dark;
   const main = palette.neutral.main;
   const medium = palette.neutral.medium;
-  const isFriend = friends.find((friend) => friend._id === friendId);
+  const [isFriend, setIsFriend] = useState(false)
+
+  const [anchorEl, setAnchorEl] = useState(null);
+  const open = Boolean(anchorEl);
+  useEffect(()=>{
+    if (friends){
+      setIsFriend(friends.find((friend) => friend._id === friendId))
+    }
+    console.log('dfjgn')
+  },[friends])
+  const handleClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+  
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+  
+  const handleSendMessage = () => {
+    startChat();
+    handleClose();
+  };
+  
+  const handleDeletePost = async() => {
+    const response = await fetch(`${import.meta.env.VITE_URL}/posts/${postId}/delete`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId: _id }),
+      }
+    );
+    console.log('sent delete post')
+    const updatedPost = await response.json();
+    console.log('response',updatedPost)
+    dispatch(deletePost({ post: updatedPost }));
+  };
 
   const patchFriend = async () => {
     const response = await fetch(
@@ -67,8 +113,8 @@ const Friend = ({ friendId, name, subtitle, userPicturePath, showChat = true }) 
           </Typography>
         </Box>
       </FlexBetween>
-      <Box display="flex">
-        {isFriend && showChat && (
+      <div className='flex justify-end gap-2 relative'>
+ {      isFriend  && (
           <IconButton
             onClick={startChat}
             sx={{ 
@@ -80,17 +126,51 @@ const Friend = ({ friendId, name, subtitle, userPicturePath, showChat = true }) 
             <ChatBubbleOutlineOutlined sx={{ color: palette.background.alt }} />
           </IconButton>
         )}
+
+
+
+
+
+      { isUser ?
         <IconButton
           onClick={() => patchFriend()}
           sx={{ backgroundColor: primaryLight, p: "0.6rem" }}
         >
-          {isFriend ? (
+          { isFriend ? (
             <PersonRemoveOutlined sx={{ color: primaryDark }} />
           ) : (
             <PersonAddOutlined sx={{ color: primaryDark }} />
-          )}
-        </IconButton>
-      </Box>
+          ) }
+        </IconButton> : null}
+        {  isFeed &&    <>
+          <IconButton
+            onClick={handleClick}
+            sx={{ 
+              p: '0rem', 
+              m: '0rem',
+              '&:hover': {
+                backgroundColor: 'transparent', 
+              }
+            }}
+          >
+            <MoreVertIcon sx={{ color: palette.neutral.alt }} />
+          </IconButton>
+          
+          <Menu
+            anchorEl={anchorEl}
+            open={open}
+            onClose={handleClose}
+            PaperProps={{
+              sx: {
+                boxShadow: '0px 2px 8px rgba(0,0,0,0.15)',
+              }
+            }}
+          >
+           { isFriend && <MenuItem onClick={handleSendMessage}><Typography>Send Message</Typography></MenuItem>}
+            {!isUser && <MenuItem onClick={handleDeletePost}>Delete Post</MenuItem>}
+          </Menu>
+        </>}
+      </div>
     </FlexBetween>
   );
 };

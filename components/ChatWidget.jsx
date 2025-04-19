@@ -13,13 +13,19 @@ import {
   ListItemAvatar,
   Avatar,
   Divider,
+  Paper,
 } from "@mui/material";
 import {
   Send,
   Close,
   ArrowBack,
   Message as MessageIcon,
+  ChatBubble,
+  KeyboardArrowUp,
 } from "@mui/icons-material";
+import PhoneIcon from '@mui/icons-material/Phone';
+import { Peer } from 'peerjs';
+import VideocamRoundedIcon from '@mui/icons-material/VideocamRounded';
 import { useDispatch, useSelector } from "react-redux";
 import {
   setConversations,
@@ -28,26 +34,34 @@ import {
   addMessage,
 } from "../src/state";
 import FlexBetween from "./FlexBetween";
-import io from "socket.io-client";
+import { useSocket } from "../src/context/SocketContext";
+import {  openChat } from "../src/state";
 
 const ChatWidget = () => {
+  const { emitTyping, stopTyping, isTyping, socket, videoCallStatus, setVideoCallStatus, setPeerId, setStream, setPeer } = useSocket();
   const dispatch = useDispatch();
+
   const { palette } = useTheme();
   const token = useSelector((state) => state.token);
   const user = useSelector((state) => state.user);
-  const conversations = useSelector((state) => state.conversations || []); // Ensure conversations is an array
+  const conversations = useSelector((state) => state.conversations || []);
   const activeConversation = useSelector((state) => state.activeConversation);
-  const chatOpen = useSelector((state) => state.chatOpen);
+  const [friends, setFriends] = useState(null)
+  const stateFriends = useSelector((state) => state.user.friends);
 
+  const chatOpen = useSelector((state) => state.chatOpen);
   const [message, setMessage] = useState("");
-  const [socket, setSocket] = useState(null);
-  const [isTyping, setIsTyping] = useState(false);
-  const [socketConnected, setSocketConnected] = useState(false);
   const [showConversations, setShowConversations] = useState(true);
   const [typingTimeout, setTypingTimeout] = useState(null);
-
   const messagesEndRef = useRef(null);
 
+  
+  useEffect(() => {
+    if (stateFriends) {
+      console.log(stateFriends)
+      setFriends(stateFriends)
+    }
+  }, [stateFriends]);
   // Debug when conversations become empty
   useEffect(() => {
     if (conversations && conversations.length === 0) {
@@ -55,34 +69,9 @@ const ChatWidget = () => {
     }
   }, [conversations]);
 
-  // Socket.io connection
-  useEffect(() => {
-    const newSocket = io(`${import.meta.env.VITE_URL}`);
-    setSocket(newSocket);
-
-    return () => {
-      newSocket.disconnect();
-    };
-  }, []);
-
   // Socket event handlers
   useEffect(() => {
     if (socket) {
-      // Set up event listeners
-      socket.emit("setup", user._id);
-  
-      socket.on("connected", () => {
-        setSocketConnected(true);
-      });
-  
-      socket.on("typing", () => {
-        setIsTyping(true);
-      });
-  
-      socket.on("stop typing", () => {
-        setIsTyping(false);
-      });
-  
       const handleMessageReceived = ({ messageToSend }) => {
         console.log("Received message data:", messageToSend);
         const { conversationId, newMessage } = messageToSend;
@@ -145,7 +134,7 @@ const ChatWidget = () => {
         socket.off("update conversation");
       };
     }
-  }, [socket, conversations, dispatch, token, user._id]); // Include dependencies
+  }, [socket, conversations, dispatch, token, user?._id]);
 
   // Fetch all conversations for the user
   useEffect(() => {
@@ -164,6 +153,7 @@ const ChatWidget = () => {
 
         if (response.ok) {
           const data = await response.json();
+          console.log('conversations', data)
           dispatch(setConversations(data));
         }
       } catch (error) {
@@ -209,7 +199,7 @@ const ChatWidget = () => {
         console.log("Creating new conversation...");
   
         // Create a new conversation via API
-        const response = await fetch("http://localhost:3001/chat/conversation", {
+        const response = await fetch(`${import.meta.env.VITE_URL}/chat/conversation`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -285,6 +275,35 @@ const ChatWidget = () => {
     }
   };
 
+  
+  const handleSetActiveConv =async (friend) =>{
+    console.log('looking for conv', friend)
+    console.log('conv right now', conversations)
+    console.log('active conv', activeConversation)
+    let conv = conversations.find(conversation => {
+   
+      return conversation.participants.some(participant => participant._id === friend._id);
+    })
+    if (conv){
+      console.log('found active conv', conv)
+      dispatch(setActiveConversation(conv))
+        console.log('active conversation', activeConversation)
+    }
+    else{
+      console.log('couldd find? active conv')
+      let name = `${friend.firstName} ${friend.lastName}`;
+      let friendID = friend._id
+      let pic = friend.userPicturePath 
+      dispatch(openChat({ friendId :friendID, name , userPicturePath:pic }));
+    }
+    setShowConversations(false)
+    
+  }
+useEffect(()=>{
+  console.log('friends', friends)
+}, [])
+
+
   // Format timestamp
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
@@ -306,45 +325,145 @@ const ChatWidget = () => {
 
   // Handle typing indicators
   const handleTyping = () => {
-    if (socket && activeConversation) {
-      if (!isTyping) {
-        socket.emit("typing", activeConversation._id);
-        setIsTyping(true);
-      }
-      
-      // Clear previous timeout
-      if (typingTimeout) {
-        clearTimeout(typingTimeout);
-      }
-      
-      // Set new timeout
-      const timeout = setTimeout(() => {
-        socket.emit("stop typing", activeConversation._id);
-        setIsTyping(false);
-      }, 3000);
-      
-      setTypingTimeout(timeout);
-    }
+    if (!activeConversation) return;
+
+    emitTyping(activeConversation._id);
+
+    if (typingTimeout) clearTimeout(typingTimeout);
+
+    const timeout = setTimeout(() => {
+      stopTyping(activeConversation._id);
+    }, 3000);
+
+    setTypingTimeout(timeout);
   };
 
-  return (
-    <Drawer
-      anchor="right"
+  const handlePhoneCallClick = () => {
+    console.log('phone call clicked');
+  };
+
+  const handleVidCallClick = async (otherUser) => {
+    const stream_ = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+
+    console.log('Local stream:', stream_);
+
+    setStream(stream_);
+   
+    // Initialize PeerJS with ICE servers
+    const newPeer = new Peer(undefined, {
+      secure: true,
+      debug: 3
+    });
+
+    newPeer.on('open', (id) => {
+      setPeer(newPeer);
+
+      // Register with socket server
+      socket.emit('register', {
+        userId: user._id,
+        peerId: id,
+      });
+      
+      socket.emit('calling', { 
+        to: otherUser, 
+        from: {
+          _id: user._id, 
+          firstName: user.firstName, 
+          lastName: user.lastName, 
+          pic: user.picturePath 
+        } 
+      });
+    });
+
+    newPeer.on('error', (err) => {
+      console.error('PeerJS error:', err);
+    });
+
+    setVideoCallStatus('calling');
+  };
+
+    // Render the minimized chat bar when closed
+    const renderMinimizedChat = () => {
+      return (
+        <Paper
+          elevation={3}
+          sx={{
+            position: "fixed",
+            bottom: 0,
+            right: { xs: 0, sm: 100 },
+            marginLeft: "auto", // Push it to the right
+            mx: { xs: 1, sm: 0 }, // margin-x to center on small devices if needed
+            width: { xs: '95%', sm: 350 }, // Full width on phones (90%), fixed width on larger screens
+            backgroundColor: palette.background.alt,
+            color: "white",
+            borderRadius: "10px 10px 0 0",
+            cursor: "pointer",
+            zIndex: 1300, // Ensure it's above other content
+            transition: "opacity 0.2s ease-in-out, visibility 0.2s ease-in-out",
+            opacity: chatOpen ? 0 : 1,
+            visibility: chatOpen ? "hidden" : "visible",
+          }}
+          onClick={() => dispatch(setChatOpen(true))}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "0.75rem 1rem",
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <ChatBubble color={`${palette.neutral.dark}`} sx={{ marginRight: 1, color: `${palette.neutral.dark}` }} />
+              <Typography color={`${palette.neutral.dark}`} variant="h6">Chat</Typography>
+            </Box>
+            <KeyboardArrowUp />
+          </Box>
+        </Paper>
+      );
+    };
+    // If chat is closed, render the minimized version
+   
+    return (
+      <>
+      {renderMinimizedChat()} {/* Always keep it rendered */}
+      <Drawer 
+      transitionDuration={{ enter: 200, exit: 200 }}
+      anchor="bottom"
+      hideBackdrop={true}
       open={chatOpen}
       onClose={() => dispatch(setChatOpen(false))}
+      variant="persistent"
+      ModalProps={{
+        disableEnforceFocus: true,
+        disableAutoFocus: true,
+        disableScrollLock: true
+      }}
       PaperProps={{
         sx: {
-          width: { xs: "100%", sm: 320 },
-          backgroundColor: palette.background.alt,
+ 
+          height: 450,
+          position: "fixed", // Change from "absolute" to "fixed"
+          bottom: 0,
+          right: { xs: 0, sm: 350 },
+          mx: { xs: 1, sm: 0 }, // margin-x to center on small devices if needed
+          width: { xs: '95%', sm: 350 }, // Full width on phones (90%), fixed width on larger screens
+          marginLeft: "auto",
+          borderRadius: "10px 10px 0 0",
+          backgroundColor: `${palette.background.alt}`,
+          zIndex: 1200, // Ensure it stays above other content
         },
       }}
     >
-      {/* Chat Header */}
-      <FlexBetween
-        p="1rem"
-        backgroundColor={palette.background.alt}
-        borderBottom={`1px solid ${palette.neutral.light}`}
-      >
+        {/* Chat Header */}
+        <FlexBetween
+          p="1rem"
+          backgroundColor={palette.background.alt}
+          borderBottom={`1px solid ${palette.neutral.light}`}
+        >
         <FlexBetween>
           {!showConversations && activeConversation && (
             <IconButton
@@ -360,21 +479,62 @@ const ChatWidget = () => {
             fontWeight="500"
           >
             {showConversations
-              ? "Messages"
+              ?  (  <Box sx={{ display: "flex", alignItems: "center" }}>
+                <ChatBubble color={`${palette.neutral.dark}`} sx={{ marginRight: 1, color: `${palette.neutral.dark}` }} />
+               
+                
+                <Typography
+                color={palette.neutral.dark}
+                variant="h5"
+                fontWeight="500"
+              >Chat  </Typography>
+                      </Box>)
               : activeConversation
-              ? `${getOtherParticipant(activeConversation).firstName} ${getOtherParticipant(activeConversation).lastName}`
-              : "Chat"}
+              ?( <Typography
+                color={palette.neutral.dark}
+                variant="h5"
+                fontWeight="500"
+              > {`${getOtherParticipant(activeConversation).firstName}  ${getOtherParticipant(activeConversation).lastName}`} </Typography>)
+              : ( 
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                <ChatBubble color={`${palette.neutral.dark}`} sx={{ marginRight: 1, color: `${palette.neutral.dark}` }} />
+               
+                <Typography
+                color={palette.neutral.dark}
+                variant="h5"
+                fontWeight="500"
+              > Chat </Typography>
+              </Box>)}
           </Typography>
         </FlexBetween>
+        <FlexBetween>
+              {!showConversations && activeConversation && <IconButton
+              sx={{
+                backgroundColor: "gray",
+                color: "white",
+                "&:hover": {
+                  backgroundColor: "blue",
+                },
+              }}
+              onClick={(event) => {
+                event.stopPropagation(); // Prevents triggering ListItem's onClick
+                handleVidCallClick(getOtherParticipant(activeConversation));
+              }}
+            >
+              <VideocamRoundedIcon />
+            </IconButton>}
+
         <IconButton onClick={() => dispatch(setChatOpen(false))}>
           <Close />
         </IconButton>
+
+        </FlexBetween>
       </FlexBetween>
 
       {/* Conversations List or Active Chat */}
       {showConversations ? (
         <List sx={{ width: "100%", bgcolor: palette.background.alt, p: 0 }}>
-          {conversations.length === 0 ? (
+          { friends && (friends.length === 0) ? (
             <Box p={3} textAlign="center">
               <MessageIcon
                 sx={{ fontSize: 40, color: palette.neutral.medium, mb: 1 }}
@@ -383,33 +543,26 @@ const ChatWidget = () => {
                 No conversations yet. Start chatting with a friend!
               </Typography>
             </Box>
-          ) : (
-            conversations.map((conversation) => {
-              if (!conversation) return null; // Skip if conversation is null/undefined
-              const otherUser = getOtherParticipant(conversation);
-              return (
-                <Box key={conversation._id}>
-                  <ListItem
-                    button
-                    alignItems="flex-start"
-                    onClick={() => {
-                      dispatch(setActiveConversation(conversation));
-                      setShowConversations(false);
-                    }}
-                  >
-                    <ListItemAvatar>
-                      <Avatar
-                        alt={`${otherUser.firstName} ${otherUser.lastName}`}
-                        src={`http://localhost:3001/assets/${otherUser.picturePath}`}
-                      />
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={`${otherUser.firstName} ${otherUser.lastName}`}
-                      secondary={
-                        conversation.messages && conversation.messages.length > 0
-                          ? conversation.messages[conversation.messages.length - 1].content
-                          : "Start a conversation"
-                      }
+        ) : 
+        ( friends && friends.map((friend, idx) =>{
+            return (
+              <Box key={idx}>
+              <ListItem
+                        button
+                        alignItems="flex-start"
+                        onClick={() => {
+                       handleSetActiveConv(friend)
+                        }}
+                      >
+                        <ListItemAvatar>
+                          <Avatar
+                            alt={`${friend.firstName} ${friend.lastName}`}
+                            src={`${import.meta.env.VITE_URL}/assets/${friend.picturePath}`}
+                          />
+                        </ListItemAvatar>
+                        <ListItemText
+                      primary={`${friend.firstName} ${friend.lastName}`}
+                      secondary={"Start a conversation"                }
                       primaryTypographyProps={{
                         fontWeight: "500",
                         color: palette.neutral.dark,
@@ -419,12 +572,126 @@ const ChatWidget = () => {
                         color: palette.neutral.medium,
                       }}
                     />
-                  </ListItem>
-                  <Divider variant="inset" component="li" />
-                </Box>
-              );
-            })
-          )}
+                    
+                              <div className="self-center flex gap-x-4">
+                              { /* phone icon
+                                 <IconButton
+                                  sx={{
+                                    backgroundColor: "gray",
+                                    color: "white",
+                                    "&:hover": {
+                                      backgroundColor: "green",
+                                    },
+                                  }}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handlePhoneCallClick();
+                                  }}
+                                >
+                                  <PhoneIcon />
+                                </IconButton> */}
+                          
+                                {/* Video Call Icon Button */}
+                                <IconButton
+                                  sx={{
+                                    backgroundColor: "gray",
+                                    color: "white",
+                                    "&:hover": {
+                                      backgroundColor: "blue",
+                                    },
+                                  }}
+                                  onClick={(event) => {
+                                    event.stopPropagation(); // Prevents triggering ListItem's onClick
+                                    handleVidCallClick(friend);
+                                  }}
+                                >
+                                  <VideocamRoundedIcon />
+                                </IconButton>
+                              </div>
+                    
+                    </ListItem>
+                    <Divider variant="inset" component="li" />
+              </Box>
+            )
+        }))
+        //(
+          //   conversations.map((conversation) => {
+          //     if (!conversation) return null; // Skip if conversation is null/undefined
+          //     const otherUser = getOtherParticipant(conversation);
+          //     return (
+          //       <Box key={conversation._id}>
+          //         <ListItem
+          //           button
+          //           alignItems="flex-start"
+          //           onClick={() => {
+          //             dispatch(setActiveConversation(conversation));
+          //             setShowConversations(false);
+          //           }}
+          //         >
+          //           <ListItemAvatar>
+          //             <Avatar
+          //               alt={`${otherUser.firstName} ${otherUser.lastName}`}
+          //               src={`${import.meta.env.VITE_URL}/assets/${otherUser.picturePath}`}
+          //             />
+          //           </ListItemAvatar>
+                    
+          //           <ListItemText
+          //             primary={`${otherUser.firstName} ${otherUser.lastName}`}
+          //             secondary={
+          //               conversation.messages && conversation.messages.length > 0
+          //                 ? conversation.messages[conversation.messages.length - 1].content
+          //                 : "Start a conversation"
+          //             }
+          //             primaryTypographyProps={{
+          //               fontWeight: "500",
+          //               color: palette.neutral.dark,
+          //             }}
+          //             secondaryTypographyProps={{
+          //               noWrap: true,
+          //               color: palette.neutral.medium,
+          //             }}
+          //           />
+          //           <div className="self-center flex gap-x-4">
+          //             <IconButton
+          //               sx={{
+          //                 backgroundColor: "gray",
+          //                 color: "white",
+          //                 "&:hover": {
+          //                   backgroundColor: "green",
+          //                 },
+          //               }}
+          //               onClick={(event) => {
+          //                 event.stopPropagation();
+          //                 handlePhoneCallClick();
+          //               }}
+          //             >
+          //               <PhoneIcon />
+          //             </IconButton>
+                
+          //             {/* Video Call Icon Button */}
+          //             <IconButton
+          //               sx={{
+          //                 backgroundColor: "gray",
+          //                 color: "white",
+          //                 "&:hover": {
+          //                   backgroundColor: "blue",
+          //                 },
+          //               }}
+          //               onClick={(event) => {
+          //                 event.stopPropagation(); // Prevents triggering ListItem's onClick
+          //                 handleVidCallClick(otherUser);
+          //               }}
+          //             >
+          //               <VideocamRoundedIcon />
+          //             </IconButton>
+          //           </div>
+          //         </ListItem>
+          //         <Divider variant="inset" component="li" />
+          //       </Box>
+          //     );
+          //   })
+          // )
+          }
         </List>
       ) : (
         // Active Chat Messages
@@ -436,7 +703,7 @@ const ChatWidget = () => {
           p={2}
           sx={{ overflowY: "auto" }}
         >
-          {activeConversation && activeConversation.messages && activeConversation.messages.length > 0 ? (
+          {activeConversation && activeConversation.messages ? (
             activeConversation.messages.map((msg) => {
               if (!msg) return null; // Skip if message is null/undefined
               return (
@@ -491,8 +758,8 @@ const ChatWidget = () => {
       )}
 
       {/* Message Input (only show in active chat) */}
-      {!showConversations && activeConversation && (
-        <Box
+     
+       {!showConversations && activeConversation && activeConversation.messages  && ( <Box
           p={2}
           borderTop={`1px solid ${palette.neutral.light}`}
           bgcolor={palette.background.alt}
@@ -526,9 +793,10 @@ const ChatWidget = () => {
             }}
             sx={{ bgcolor: palette.background.default }}
           />
-        </Box>
-      )}
+        </Box>)}
+     
     </Drawer>
+    </>
   );
 };
 

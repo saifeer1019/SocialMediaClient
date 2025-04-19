@@ -16,19 +16,20 @@ import {
   Button,
   IconButton,
   useMediaQuery,
+  Grid,
 } from "@mui/material";
 import FlexBetween from "../../../components/FlexBetween";
 import Dropzone from "react-dropzone";
 import UserImage from "../../../components/UserImage";
 import WidgetWrapper from "../../../components/WidgetWrapper";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { setPosts } from "../../state";
 
 const MyPostWidget = ({ picturePath }) => {
   const dispatch = useDispatch();
   const [isImage, setIsImage] = useState(false);
-  const [image, setImage] = useState(null);
+  const [images, setImages] = useState([]);
   const [post, setPost] = useState("");
   const { palette } = useTheme();
   const { _id } = useSelector((state) => state.user);
@@ -41,10 +42,12 @@ const MyPostWidget = ({ picturePath }) => {
     const formData = new FormData();
     formData.append("userId", _id);
     formData.append("description", post);
-    if (image) {
-      formData.append("picture", image);
-      formData.append("picturePath", image.name);
-    }
+    
+    // Append all images to formData
+    images.forEach((image, index) => {
+      formData.append("pictures", image);
+      formData.append(`picturePaths[${index}]`, image.name);
+    });
 
     const response = await fetch(`${import.meta.env.VITE_URL}/posts`, {
       method: "POST",
@@ -53,8 +56,23 @@ const MyPostWidget = ({ picturePath }) => {
     });
     const posts = await response.json();
     dispatch(setPosts({ posts }));
-    setImage(null);
+    setImages([]);
     setPost("");
+  };
+
+  // Creates object URLs for image previews
+  const imageUrls = images.map(image => URL.createObjectURL(image));
+  
+  // Clean up object URLs when component unmounts or images change
+  useEffect(() => {
+    return () => {
+      imageUrls.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [images]);
+
+  // Remove a specific image from the images array
+  const removeImage = (index) => {
+    setImages(images.filter((_, i) => i !== index));
   };
 
   return (
@@ -73,6 +91,55 @@ const MyPostWidget = ({ picturePath }) => {
           }}
         />
       </FlexBetween>
+      
+      {/* Image preview section */}
+      {images.length > 0 && (
+        <Box mt="1rem">
+          <Grid container spacing={1}>
+            {imageUrls.map((url, index) => (
+              <Grid item xs={4} sm={3} md={3} key={index}>
+                <Box
+                  position="relative"
+                  sx={{
+                    height: "100px",
+                    borderRadius: "4px",
+                    overflow: "hidden",
+                  }}
+                >
+                  <IconButton
+                    onClick={() => removeImage(index)}
+                    sx={{
+                      position: "absolute",
+                      top: "2px",
+                      right: "2px",
+                      backgroundColor: "rgba(0,0,0,0.5)",
+                      color: "white",
+                      padding: "4px",
+                      "&:hover": {
+                        backgroundColor: "rgba(0,0,0,0.7)",
+                      },
+                    }}
+                    size="small"
+                  >
+                    <DeleteOutlined fontSize="small" />
+                  </IconButton>
+                  <Box
+                    component="img"
+                    src={url}
+                    alt={`Preview ${index}`}
+                    sx={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
+                  />
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      )}
+      
       {isImage && (
         <Box
           border={`1px solid ${medium}`}
@@ -82,37 +149,22 @@ const MyPostWidget = ({ picturePath }) => {
         >
           <Dropzone
             acceptedFiles=".jpg,.jpeg,.png"
-            multiple={false}
-            onDrop={(acceptedFiles) => setImage(acceptedFiles[0])}
+            multiple={true}
+            onDrop={(acceptedFiles) => setImages([...images, ...acceptedFiles])}
           >
             {({ getRootProps, getInputProps }) => (
-              <FlexBetween>
-                <Box
-                  {...getRootProps()}
-                  border={`2px dashed ${palette.primary.main}`}
-                  p="1rem"
-                  width="100%"
-                  sx={{ "&:hover": { cursor: "pointer" } }}
-                >
-                  <input {...getInputProps()} />
-                  {!image ? (
-                    <p>Add Image Here</p>
-                  ) : (
-                    <FlexBetween>
-                      <Typography>{image.name}</Typography>
-                      <EditOutlined />
-                    </FlexBetween>
-                  )}
-                </Box>
-                {image && (
-                  <IconButton
-                    onClick={() => setImage(null)}
-                    sx={{ width: "15%" }}
-                  >
-                    <DeleteOutlined />
-                  </IconButton>
-                )}
-              </FlexBetween>
+              <Box
+                {...getRootProps()}
+                border={`2px dashed ${palette.primary.main}`}
+                p="1rem"
+                width="100%"
+                sx={{ "&:hover": { cursor: "pointer" } }}
+              >
+                <input {...getInputProps()} />
+                <Typography align="center">
+                  Drop images here or click to select files
+                </Typography>
+              </Box>
             )}
           </Dropzone>
         </Box>
@@ -127,7 +179,7 @@ const MyPostWidget = ({ picturePath }) => {
             color={mediumMain}
             sx={{ "&:hover": { cursor: "pointer", color: medium } }}
           >
-            Image
+            Images
           </Typography>
         </FlexBetween>
 
@@ -155,7 +207,7 @@ const MyPostWidget = ({ picturePath }) => {
         )}
 
         <Button
-          disabled={!post}
+          disabled={!post && images.length === 0}
           onClick={handlePost}
           sx={{
             color: palette.background.alt,
