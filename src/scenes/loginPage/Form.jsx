@@ -48,6 +48,7 @@ const initialValuesLogin = {
 
 const Form = () => {
   const [pageType, setPageType] = useState("login");
+  const [clicked, setClicked] = useState(false)
   const { palette } = useTheme();
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -92,6 +93,7 @@ useEffect(() =>{
     });
     const loggedIn = await loggedInResponse.json();
     onSubmitProps.resetForm();
+    setClicked(true)
     if (loggedIn) {
       console.log('logged in')
       console.log(token)
@@ -241,7 +243,7 @@ useEffect(() =>{
           </Box>
 
           {/* BUTTONS */}
-          <Box>
+      
             <Button
               fullWidth
               type="submit"
@@ -269,11 +271,11 @@ useEffect(() =>{
                 },
               }}
             >
-              {isLogin
-                ? "Don't have an account? Sign Up here."
+              {clicked 
+                ? "Don't have an account? Sign Up here. Clicked"
                 : "Already have an account? Login here."}
             </Typography>
-          </Box>
+  
         </form>
       )}
     </Formik>
