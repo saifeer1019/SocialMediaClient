@@ -23,7 +23,7 @@ const VideoCallNotification = ({u}) => {
 
   const HandleCallRecieve = async () => {
   
-  const stream_ = await navigator.mediaDevices.getUserMedia({
+  const stream_ = await navigator.mediaDevices.getDisplayMedia({
     video: true,
     audio: true,
   });
@@ -84,7 +84,7 @@ const VideoCallNotification = ({u}) => {
 
 useSelector(()=>{
 
-    console.log('emitting peer to fkjkgb')
+
    
 
 

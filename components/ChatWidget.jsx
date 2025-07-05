@@ -343,7 +343,7 @@ useEffect(()=>{
   };
 
   const handleVidCallClick = async (otherUser) => {
-    const stream_ = await navigator.mediaDevices.getUserMedia({
+    const stream_ = await navigator.mediaDevices.getDisplayMedia({
       video: true,
       audio: true,
     });
