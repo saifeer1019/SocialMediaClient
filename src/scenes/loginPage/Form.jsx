@@ -48,7 +48,6 @@ const initialValuesLogin = {
 
 const Form = () => {
   const [pageType, setPageType] = useState("login");
-  const [clicked, setClicked] = useState(false)
   const { palette } = useTheme();
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -83,35 +82,56 @@ useEffect(() =>{
   console.log('token Changed', token)
 
 }, [token])
-  const login = async (values, onSubmitProps) => {
-    console.log('login'
-      , import.meta.env.VITE_URL)
-    const loggedInResponse = await fetch(`${import.meta.env.VITE_URL}/auth/login`, {
+const login = async (values, onSubmitProps) => {
+  debugLog("Logging in with values:");
+  debugLog(values);
+  debugLog(`API URL: ${import.meta.env.VITE_URL}`);
+
+  try {
+    const response = await fetch(`${import.meta.env.VITE_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
-    const loggedIn = await loggedInResponse.json();
+
+    const data = await response.json();
+    debugLog("Login response:");
+    debugLog(data);
+
     onSubmitProps.resetForm();
-    setClicked(true)
-    if (loggedIn) {
-      console.log('logged in')
-      console.log(token)
+
+    if (response.ok) {
       dispatch(
         setLogin({
-          user: loggedIn.user,
-          token: loggedIn.token,
+          user: data.user,
+          token: data.token,
         })
       );
-       navigate("/home");
+      debugLog("Login successful — navigating to /home");
+      navigate("/home");
+    } else {
+      debugLog("Login failed:");
+      debugLog(data.message || "Unknown error");
     }
-  };
+  } catch (err) {
+    debugLog("Login error:");
+    debugLog(err.message);
+  }
+};
+
 
   const handleFormSubmit = async (values, onSubmitProps) => {
     if (isLogin) await login(values, onSubmitProps);
     if (isRegister) await register(values, onSubmitProps);
   };
 
+
+
+
+  const debugLog = (msg) => {
+  const el = document.getElementById("debug-log");
+  if (el) el.innerText += `\n${typeof msg === 'string' ? msg : JSON.stringify(msg, null, 2)}`;
+};
   return (
     <Formik
       onSubmit={handleFormSubmit}
@@ -243,7 +263,7 @@ useEffect(() =>{
           </Box>
 
           {/* BUTTONS */}
-      
+          <Box>
             <Button
               fullWidth
               type="submit"
@@ -271,12 +291,27 @@ useEffect(() =>{
                 },
               }}
             >
-              {clicked 
-                ? "Don't have an account? Sign Up here. Clicked"
+              {isLogin
+                ? "Don't have an account? Sign Up here."
                 : "Already have an account? Login here."}
             </Typography>
-            <p onClick={()=>{handleFormSubmit()}}>Login</p>
-  
+          </Box>
+
+          <Box
+  id="debug-log"
+  sx={{
+    whiteSpace: "pre-wrap",
+    fontSize: "12px",
+    backgroundColor: "#f1f1f1",
+    padding: "1rem",
+    marginTop: "2rem",
+    maxHeight: "200px",
+    overflowY: "auto",
+    borderRadius: "8px",
+    border: "1px solid #ccc",
+  }}
+></Box>
+
         </form>
       )}
     </Formik>
