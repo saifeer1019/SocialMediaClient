@@ -275,7 +275,7 @@ useEffect(() =>{
                 ? "Don't have an account? Sign Up here. Clicked"
                 : "Already have an account? Login here."}
             </Typography>
-            <p onClick={handleFormSubmit}>Login</p>
+            <p onClick={()=>{handleFormSubmit()}}>Login</p>
   
         </form>
       )}
