@@ -23,7 +23,7 @@ const VideoCallNotification = ({u}) => {
 
   const HandleCallRecieve = async () => {
   
-  const stream_ = await navigator.mediaDevices.getDisplayMedia({
+  const stream_ = await navigator.mediaDevices.getUserMedia({
     video: true,
     audio: true,
   });
@@ -80,6 +80,12 @@ const VideoCallNotification = ({u}) => {
 
 
 
+}
+const HandleCallReject =async () => {
+  
+    socket.emit('reject-call-from', { caller: callerId.from._id} 
+    );
+    setVideoCallStatus('')
 }
 
 useSelector(()=>{
@@ -171,7 +177,7 @@ const handleClose = () =>{
         <div className="flex gap-4 w-full">
           <button
             className="flex-1  text-red-600 py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
-       
+        onClick={HandleCallReject}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />

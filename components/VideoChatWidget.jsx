@@ -62,6 +62,11 @@ const VideoChatWidget = () => {
       console.log('peerid recieved', pid)
       setPeerId(pid)     
     })
+     socket.on('call-rejected', () =>{
+   setVideoCallStatus('') 
+   endCall()   
+    })
+    
 
    },[])
 const hanldeClick= () =>{
